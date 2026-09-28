@@ -1,0 +1,98 @@
+/* Custom CSS Styles for Project Follow-Up Tool */
+
+/* Custom scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Row Hover effects */
+.task-row:hover {
+  background-color: rgba(30, 41, 59, 0.7);
+}
+
+.task-row.selected {
+  background-color: rgba(14, 116, 144, 0.3) !important;
+  border-left: 3px solid #06b6d4;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s ease-out forwards;
+}
+
+/* WBS Level Indentation styles */
+.wbs-level-0 { padding-left: 0.5rem; font-weight: 700; color: #f8fafc; }
+.wbs-level-1 { padding-left: 1.5rem; font-weight: 600; color: #e2e8f0; }
+.wbs-level-2 { padding-left: 2.5rem; font-weight: 400; color: #cbd5e1; }
+.wbs-level-3 { padding-left: 3.5rem; font-weight: 400; color: #94a3b8; }
+
+/* Gantt SVG styling */
+.gantt-svg text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  user-select: none;
+}
+
+/* Print / PDF Stylesheet */
+@media print {
+  header, section, #splitDivider, #btnNewTask, #btnNewProject, #btnLoadReference, #btnExportJSON, #btnExportCSV, #btnPrint {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+    overflow: visible !important;
+  }
+
+  #gridPanel {
+    width: 45% !important;
+    border-right: 1px solid #ccc !important;
+    background: white !important;
+  }
+
+  #ganttPanel {
+    width: 55% !important;
+    background: white !important;
+  }
+
+  .gantt-wrapper {
+    background: white !important;
+    border: 1px solid #ccc !important;
+  }
+
+  .gantt-svg text {
+    fill: #1e293b !important;
+  }
+
+  table {
+    color: black !important;
+  }
+
+  th {
+    background: #f1f5f9 !important;
+    color: black !important;
+  }
+
+  td {
+    border-color: #e2e8f0 !important;
+  }
+}

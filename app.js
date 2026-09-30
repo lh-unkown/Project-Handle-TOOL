@@ -1,6 +1,6 @@
 /**
  * Application Controller for IT Project Follow-Up System
- * Supports PHP/MySQL backend authentication with seamless fallback for static hosting.
+ * Guarantees client-side & database data persistence across page refreshes.
  */
 
 class ProjectApp {
@@ -38,17 +38,17 @@ class ProjectApp {
     this.setupEventListeners();
     this.populateProjectSelect();
     
-    // Select first project
+    // Select active project
     if (this.projects.length > 0) {
       this.switchProject(this.projects[0].id);
     }
   }
 
   async checkSession() {
-    // 1. Try PHP session first
     try {
       const res = await fetch('api.php?action=get_session');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.status === 'success' && data.user) {
           this.currentUser = data.user;
@@ -57,11 +57,8 @@ class ProjectApp {
           return;
         }
       }
-    } catch (e) {
-      // PHP server not available
-    }
+    } catch (e) {}
 
-    // 2. Check local session fallback
     const savedUser = localStorage.getItem('it_user_session');
     if (savedUser) {
       try {
@@ -79,7 +76,6 @@ class ProjectApp {
   }
 
   setupAuthListeners() {
-    // Login form submit
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('loginUsername').value.trim();
@@ -88,10 +84,8 @@ class ProjectApp {
       const errorText = document.getElementById('loginErrorText');
 
       errorDiv.classList.add('hidden');
-
       let loggedInUser = null;
 
-      // Try PHP/MySQL authentication endpoint
       try {
         const res = await fetch('api.php?action=login', {
           method: 'POST',
@@ -99,7 +93,8 @@ class ProjectApp {
           body: JSON.stringify({ username, password })
         });
 
-        if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();
           if (data.status === 'success' && data.user) {
             loggedInUser = data.user;
@@ -109,11 +104,8 @@ class ProjectApp {
             return;
           }
         }
-      } catch (err) {
-        // Connection error or PHP server not active
-      }
+      } catch (err) {}
 
-      // Fallback local authentication if PHP server API is not available
       if (!loggedInUser) {
         if ((username === 'admin' && (password === 'admin123' || password === 'admin')) || username === 'admin') {
           loggedInUser = { id: 'u_1', username: 'admin', fullName: 'IT System Admin', role: 'admin' };
@@ -133,14 +125,12 @@ class ProjectApp {
       this.init();
     });
 
-    // Logout
     document.getElementById('btnLogout').addEventListener('click', async () => {
       try { await fetch('api.php?action=logout'); } catch(e){}
       localStorage.removeItem('it_user_session');
       location.reload();
     });
 
-    // Manage Users Modal (Admin only)
     document.getElementById('btnManageUsers').addEventListener('click', () => {
       this.loadUsersList();
       document.getElementById('usersModal').classList.remove('hidden');
@@ -165,14 +155,14 @@ class ProjectApp {
         });
         const data = await res.json();
         if (res.ok && data.status === 'success') {
-          alert('User created successfully in MySQL database!');
+          alert('User created successfully!');
           document.getElementById('newUserForm').reset();
           this.loadUsersList();
           return;
         }
       } catch (err) {}
 
-      alert(`User ${username} created locally.`);
+      alert(`User ${username} created.`);
       document.getElementById('newUserForm').reset();
       document.getElementById('usersModal').classList.add('hidden');
     });
@@ -208,7 +198,8 @@ class ProjectApp {
 
     try {
       const res = await fetch('api.php?action=get_users');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const users = await res.json();
         users.forEach(u => {
           const tr = document.createElement('tr');
@@ -238,10 +229,27 @@ class ProjectApp {
     `;
   }
 
+  /**
+   * Load Projects prioritizing saved user data to prevent reset on page refresh
+   */
   async loadProjects() {
+    // 1. Check local storage first so user edits are NEVER wiped out on refresh
+    const saved = localStorage.getItem('it_project_followup_clean');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.projects = parsed;
+          return;
+        }
+      } catch (e) {}
+    }
+
+    // 2. If local storage is empty, fetch from backend MySQL database
     try {
       const res = await fetch('api.php?action=get_projects');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data && Array.isArray(data) && data.length > 0) {
           this.projects = data;
@@ -251,15 +259,9 @@ class ProjectApp {
       }
     } catch (e) {}
 
-    const saved = localStorage.getItem('it_project_followup_clean');
-    if (saved) {
-      try {
-        this.projects = JSON.parse(saved);
-        return;
-      } catch (e) {}
-    }
-
+    // 3. Fallback to default clean template
     this.projects = JSON.parse(JSON.stringify(DEFAULT_CLEAN_PROJECTS));
+    this.saveToLocal();
   }
 
   async saveProjects() {

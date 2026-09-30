@@ -1,6 +1,6 @@
 /**
  * Application Controller for IT Project Follow-Up System
- * Guarantees client-side & database data persistence across page refreshes.
+ * Includes complete Project & Sub-task Creation, Modification, and Deletion functionality.
  */
 
 class ProjectApp {
@@ -19,7 +19,7 @@ class ProjectApp {
   async init() {
     this.setupAuthListeners();
 
-    // Check PHP Server Session or Local Session
+    // Check Session
     await this.checkSession();
 
     if (!this.currentUser) {
@@ -229,11 +229,8 @@ class ProjectApp {
     `;
   }
 
-  /**
-   * Load Projects prioritizing saved user data to prevent reset on page refresh
-   */
   async loadProjects() {
-    // 1. Check local storage first so user edits are NEVER wiped out on refresh
+    // Check local storage first so user edits are prioritized
     const saved = localStorage.getItem('it_project_followup_clean');
     if (saved) {
       try {
@@ -245,7 +242,6 @@ class ProjectApp {
       } catch (e) {}
     }
 
-    // 2. If local storage is empty, fetch from backend MySQL database
     try {
       const res = await fetch('api.php?action=get_projects');
       const contentType = res.headers.get('content-type') || '';
@@ -259,7 +255,6 @@ class ProjectApp {
       }
     } catch (e) {}
 
-    // 3. Fallback to default clean template
     this.projects = JSON.parse(JSON.stringify(DEFAULT_CLEAN_PROJECTS));
     this.saveToLocal();
   }
@@ -502,9 +497,21 @@ class ProjectApp {
       this.openTaskModal(null);
     });
 
+    // Create New Project Button
     document.getElementById('btnNewProject').addEventListener('click', () => {
-      document.getElementById('projectModal').classList.remove('hidden');
-      document.getElementById('inputProjStartDate').value = new Date().toISOString().split('T')[0];
+      this.openProjectModal(null);
+    });
+
+    // Edit Active Project Details Button
+    document.getElementById('btnEditProject').addEventListener('click', () => {
+      if (this.activeProject) {
+        this.openProjectModal(this.activeProject.id);
+      }
+    });
+
+    // Delete Active Project Button
+    document.getElementById('btnDeleteProject').addEventListener('click', () => {
+      this.deleteCurrentProject();
     });
 
     document.getElementById('btnCloseProjectModal').addEventListener('click', () => {
@@ -515,8 +522,10 @@ class ProjectApp {
       document.getElementById('projectModal').classList.add('hidden');
     });
 
+    // Save Project Form (Creates new OR updates existing project)
     document.getElementById('projectForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const projId = document.getElementById('editProjectId').value;
       const name = document.getElementById('inputProjName').value.trim();
       const leadName = document.getElementById('inputProjLead').value.trim();
       const startDate = document.getElementById('inputProjStartDate').value;
@@ -524,24 +533,37 @@ class ProjectApp {
 
       if (!name || !startDate) return;
 
-      const newProj = {
-        id: `proj_${Date.now()}`,
-        name: name,
-        category: "General IT",
-        leadName: leadName || 'IT Lead',
-        startDate: startDate,
-        description: desc,
-        tasks: [
-          { id: 1, name: `${name} - Phase 1`, duration: 5, isSummary: true, level: 0, expanded: true, predecessors: "", resources: leadName || "IT Lead", progress: 0 },
-          { id: 2, name: "Initial Analysis & Setup", duration: 2, isSummary: false, level: 1, predecessors: "", resources: leadName || "IT Staff", progress: 0 },
-          { id: 3, name: "Implementation Task", duration: 3, isSummary: false, level: 1, predecessors: "2", resources: "Engineer", progress: 0 }
-        ]
-      };
+      if (projId) {
+        // Edit existing project
+        const proj = this.projects.find(p => p.id === projId);
+        if (proj) {
+          proj.name = name;
+          proj.leadName = leadName || 'IT Lead';
+          proj.startDate = startDate;
+          proj.description = desc;
+        }
+      } else {
+        // Create new project
+        const newProj = {
+          id: `proj_${Date.now()}`,
+          name: name,
+          category: "General IT",
+          leadName: leadName || 'IT Lead',
+          startDate: startDate,
+          description: desc,
+          tasks: [
+            { id: 1, name: `${name} - Phase 1`, duration: 5, isSummary: true, level: 0, expanded: true, predecessors: "", resources: leadName || "IT Lead", progress: 0 },
+            { id: 2, name: "Initial Analysis & Setup", duration: 2, isSummary: false, level: 1, predecessors: "", resources: leadName || "IT Staff", progress: 0 },
+            { id: 3, name: "Implementation Task", duration: 3, isSummary: false, level: 1, predecessors: "2", resources: "Engineer", progress: 0 }
+          ]
+        };
+        this.projects.push(newProj);
+        this.activeProject = newProj;
+      }
 
-      this.projects.push(newProj);
       await this.saveProjects();
       this.populateProjectSelect();
-      this.switchProject(newProj.id);
+      this.switchProject(this.activeProject.id);
 
       document.getElementById('projectModal').classList.add('hidden');
       document.getElementById('projectForm').reset();
@@ -586,6 +608,63 @@ class ProjectApp {
 
     document.getElementById('btnExportJSON').addEventListener('click', () => this.exportJSON());
     document.getElementById('btnPrint').addEventListener('click', () => window.print());
+  }
+
+  openProjectModal(projectId) {
+    const modal = document.getElementById('projectModal');
+    const title = document.getElementById('projectModalTitle');
+    const form = document.getElementById('projectForm');
+    form.reset();
+
+    if (projectId) {
+      const proj = this.projects.find(p => p.id === projectId);
+      if (!proj) return;
+
+      title.innerHTML = `<i class="fa-solid fa-pen-to-square text-cyan-400"></i> Modify Project Details`;
+      document.getElementById('editProjectId').value = proj.id;
+      document.getElementById('inputProjName').value = proj.name;
+      document.getElementById('inputProjLead').value = proj.leadName || '';
+      document.getElementById('inputProjStartDate').value = proj.startDate || '';
+      document.getElementById('inputProjDesc').value = proj.description || '';
+    } else {
+      title.innerHTML = `<i class="fa-solid fa-folder-plus text-cyan-400"></i> Create New IT Project`;
+      document.getElementById('editProjectId').value = '';
+      document.getElementById('inputProjStartDate').value = new Date().toISOString().split('T')[0];
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  async deleteCurrentProject() {
+    if (!this.activeProject) return;
+
+    const projToDelete = this.activeProject;
+    if (!confirm(`Are you sure you want to delete project '${projToDelete.name}' and all its sub-tasks?`)) {
+      return;
+    }
+
+    // Call server deletion API if running on PHP/MySQL server
+    try {
+      await fetch('api.php?action=delete_project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: projToDelete.id })
+      });
+    } catch (e) {}
+
+    // Remove from projects array
+    this.projects = this.projects.filter(p => p.id !== projToDelete.id);
+
+    // Fallback template if all projects are deleted
+    if (this.projects.length === 0) {
+      this.projects = JSON.parse(JSON.stringify(DEFAULT_CLEAN_PROJECTS));
+    }
+
+    await this.saveProjects();
+    this.populateProjectSelect();
+    this.switchProject(this.projects[0].id);
+
+    alert(`Project '${projToDelete.name}' deleted successfully.`);
   }
 
   openTaskModal(taskId) {

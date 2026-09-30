@@ -31,13 +31,21 @@ $currentUser = getCurrentUser();
       </div>
     </div>
 
-    <!-- Active Project Switcher & Base Date -->
+    <!-- Active Project Switcher, Base Date & Edit/Delete Controls -->
     <div class="flex items-center space-x-3 my-1 sm:my-0">
       <div class="flex items-center bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5">
         <label class="text-xs text-slate-400 mr-2"><i class="fa-solid fa-folder text-cyan-400 mr-1"></i> Project:</label>
-        <select id="projectSelect" class="bg-transparent text-sm text-cyan-200 font-semibold focus:outline-none cursor-pointer max-w-[200px]">
+        <select id="projectSelect" class="bg-transparent text-sm text-cyan-200 font-semibold focus:outline-none cursor-pointer max-w-[180px]">
           <!-- Loaded dynamically -->
         </select>
+        <div class="flex items-center space-x-1 ml-2 border-l border-slate-700 pl-2">
+          <button id="btnEditProject" title="Modify Project Details" class="admin-only text-slate-400 hover:text-cyan-400 text-xs p-1 transition">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+          <button id="btnDeleteProject" title="Delete Active Project" class="admin-only text-slate-400 hover:text-red-400 text-xs p-1 transition">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
       </div>
 
       <div class="flex items-center bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5">
@@ -389,17 +397,19 @@ $currentUser = getCurrentUser();
     </div>
   </div>
 
-  <!-- New Project Modal Dialog -->
+  <!-- Create / Edit Project Modal Dialog -->
   <div id="projectModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
     <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
       <div class="bg-slate-800 px-5 py-4 border-b border-slate-700 flex items-center justify-between">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <h3 id="projectModalTitle" class="text-sm font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-folder-plus text-cyan-400"></i> Create New Project
         </h3>
         <button id="btnCloseProjectModal" class="text-slate-400 hover:text-white transition"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
 
       <form id="projectForm" class="p-5 space-y-4 text-xs">
+        <input type="hidden" id="editProjectId">
+
         <div>
           <label class="block text-slate-300 font-semibold mb-1">Project Name *</label>
           <input type="text" id="inputProjName" required class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-slate-100 text-xs focus:outline-none focus:border-cyan-500">
@@ -425,7 +435,7 @@ $currentUser = getCurrentUser();
             Cancel
           </button>
           <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-md font-semibold text-xs shadow-lg transition">
-            Save Project to MySQL
+            Save Project
           </button>
         </div>
       </form>

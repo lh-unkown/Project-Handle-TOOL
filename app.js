@@ -1,5 +1,6 @@
 /**
- * Application Controller with Login Authentication & Role-Based Access Control (RBAC)
+ * Application Controller for PHP + MySQL IT Project Follow-Up System
+ * Interfaces directly with api.php backend for MySQL data persistence and RBAC authentication.
  */
 
 class ProjectApp {
@@ -18,18 +19,10 @@ class ProjectApp {
   async init() {
     this.setupAuthListeners();
 
-    // Check user session
-    const savedUser = localStorage.getItem('it_user_session');
-    if (savedUser) {
-      try {
-        this.currentUser = JSON.parse(savedUser);
-        this.applyUserRoleUI();
-        document.getElementById('loginModal').classList.add('hidden');
-      } catch (e) {
-        this.showLoginModal();
-        return;
-      }
-    } else {
+    // Check PHP Server Session
+    await this.checkSession();
+
+    if (!this.currentUser) {
       this.showLoginModal();
       return;
     }
@@ -51,6 +44,22 @@ class ProjectApp {
     }
   }
 
+  async checkSession() {
+    try {
+      const res = await fetch('api.php?action=get_session');
+      const data = await res.json();
+      if (data.status === 'success' && data.user) {
+        this.currentUser = data.user;
+        this.applyUserRoleUI();
+        document.getElementById('loginModal').classList.add('hidden');
+      } else {
+        this.currentUser = null;
+      }
+    } catch (e) {
+      console.log('Session check failed, showing login.');
+    }
+  }
+
   showLoginModal() {
     document.getElementById('loginModal').classList.remove('hidden');
   }
@@ -67,8 +76,7 @@ class ProjectApp {
       errorDiv.classList.add('hidden');
 
       try {
-        // Try server authentication API first
-        const res = await fetch('/api/login', {
+        const res = await fetch('api.php?action=login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
@@ -77,38 +85,23 @@ class ProjectApp {
         const data = await res.json();
         if (res.ok && data.status === 'success') {
           this.currentUser = data.user;
-          localStorage.setItem('it_user_session', JSON.stringify(this.currentUser));
           document.getElementById('loginModal').classList.add('hidden');
           this.applyUserRoleUI();
           this.init();
           return;
         } else {
-          errorText.textContent = data.message || 'Invalid credentials';
+          errorText.textContent = data.message || 'Invalid username or password';
           errorDiv.classList.remove('hidden');
-          return;
         }
       } catch (err) {
-        // Offline fallback login check
-        if (username === 'admin' && password === 'admin123') {
-          this.currentUser = { id: 'u_1', username: 'admin', fullName: 'IT System Admin', role: 'admin' };
-        } else if (username === 'user' && password === 'user123') {
-          this.currentUser = { id: 'u_2', username: 'user', fullName: 'IT Staff Member', role: 'user' };
-        } else {
-          errorText.textContent = 'Invalid credentials';
-          errorDiv.classList.remove('hidden');
-          return;
-        }
-
-        localStorage.setItem('it_user_session', JSON.stringify(this.currentUser));
-        document.getElementById('loginModal').classList.add('hidden');
-        this.applyUserRoleUI();
-        this.init();
+        errorText.textContent = 'Connection to PHP/MySQL backend failed';
+        errorDiv.classList.remove('hidden');
       }
     });
 
     // Logout
-    document.getElementById('btnLogout').addEventListener('click', () => {
-      localStorage.removeItem('it_user_session');
+    document.getElementById('btnLogout').addEventListener('click', async () => {
+      await fetch('api.php?action=logout');
       location.reload();
     });
 
@@ -130,21 +123,21 @@ class ProjectApp {
       const role = document.getElementById('newRole').value;
 
       try {
-        const res = await fetch('/api/users', {
+        const res = await fetch('api.php?action=create_user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password, fullName, role })
         });
         const data = await res.json();
         if (res.ok && data.status === 'success') {
-          alert('New user created successfully!');
+          alert('User created successfully in MySQL database!');
           document.getElementById('newUserForm').reset();
           this.loadUsersList();
         } else {
           alert(data.message || 'Failed to create user');
         }
       } catch (err) {
-        alert('Server API offline. User creation requires active backend.');
+        alert('PHP/MySQL API request failed.');
       }
     });
   }
@@ -163,7 +156,6 @@ class ProjectApp {
       roleTag.className = 'text-[9px] uppercase font-bold text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800';
     }
 
-    // Role-based Element Permissions (Hide admin-only elements for standard users)
     const isAdmin = this.currentUser.role === 'admin';
     document.querySelectorAll('.admin-only').forEach(el => {
       if (isAdmin) {
@@ -179,7 +171,7 @@ class ProjectApp {
     tbody.innerHTML = '';
 
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('api.php?action=get_users');
       if (res.ok) {
         const users = await res.json();
         users.forEach(u => {
@@ -194,54 +186,37 @@ class ProjectApp {
         });
       }
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="3" class="py-3 text-center text-slate-500">Offline mode</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" class="py-3 text-center text-slate-500">Failed to load users from MySQL</td></tr>';
     }
   }
 
   async loadProjects() {
     try {
-      const res = await fetch('/api/projects');
+      const res = await fetch('api.php?action=get_projects');
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data) && data.length > 0) {
           this.projects = data;
-          this.saveToLocal();
           return;
         }
       }
     } catch (e) {
-      console.log('Server API offline, using browser storage.');
+      console.log('MySQL API fetch error:', e);
     }
 
-    const saved = localStorage.getItem('it_project_followup_clean');
-    if (saved) {
-      try {
-        this.projects = JSON.parse(saved);
-      } catch (e) {
-        this.projects = JSON.parse(JSON.stringify(DEFAULT_CLEAN_PROJECTS));
-      }
-    } else {
-      this.projects = JSON.parse(JSON.stringify(DEFAULT_CLEAN_PROJECTS));
-      this.saveProjects();
-    }
+    this.projects = JSON.parse(JSON.stringify(DEFAULT_CLEAN_PROJECTS));
   }
 
   async saveProjects() {
-    this.saveToLocal();
-
     try {
-      await fetch('/api/projects', {
+      await fetch('api.php?action=save_project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.projects)
       });
     } catch (e) {
-      // Server backend optional
+      console.error('Failed to save to MySQL:', e);
     }
-  }
-
-  saveToLocal() {
-    localStorage.setItem('it_project_followup_clean', JSON.stringify(this.projects));
   }
 
   populateProjectSelect() {
@@ -479,7 +454,7 @@ class ProjectApp {
       document.getElementById('projectModal').classList.add('hidden');
     });
 
-    document.getElementById('projectForm').addEventListener('submit', (e) => {
+    document.getElementById('projectForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('inputProjName').value.trim();
       const leadName = document.getElementById('inputProjLead').value.trim();
@@ -491,18 +466,19 @@ class ProjectApp {
       const newProj = {
         id: `proj_${Date.now()}`,
         name: name,
+        category: "General IT",
         leadName: leadName || 'IT Lead',
         startDate: startDate,
         description: desc,
         tasks: [
-          { id: 1, name: `${name} - Main Phase`, duration: 5, isSummary: true, level: 0, expanded: true, predecessors: "", resources: leadName || "IT Lead", progress: 0 },
+          { id: 1, name: `${name} - Phase 1`, duration: 5, isSummary: true, level: 0, expanded: true, predecessors: "", resources: leadName || "IT Lead", progress: 0 },
           { id: 2, name: "Initial Analysis & Setup", duration: 2, isSummary: false, level: 1, predecessors: "", resources: leadName || "IT Staff", progress: 0 },
           { id: 3, name: "Implementation Task", duration: 3, isSummary: false, level: 1, predecessors: "2", resources: "Engineer", progress: 0 }
         ]
       };
 
       this.projects.push(newProj);
-      this.saveProjects();
+      await this.saveProjects();
       this.populateProjectSelect();
       this.switchProject(newProj.id);
 
@@ -644,7 +620,7 @@ class ProjectApp {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.projects, null, 2));
     const dlAnchorElem = document.createElement('a');
     dlAnchorElem.setAttribute("href", dataStr);
-    dlAnchorElem.setAttribute("download", `IT_Projects_Backup.json`);
+    dlAnchorElem.setAttribute("download", `IT_Projects_MySQL_Export.json`);
     dlAnchorElem.click();
   }
 }
